@@ -1,0 +1,26 @@
+Move prover returns: exiting with verification errors
+error: post-condition does not hold
+   ┌─ tests/sources/functional/closures/behavioral_derived_variant_write_many.move:38:29
+   │
+38 │     spec c_many_incorrect { ensures s.f1 == 1; }
+   │                             ^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/closures/behavioral_derived_variant_write_many.move:37: c_many_incorrect
+   =         s = <redacted>
+   =     at tests/sources/functional/closures/behavioral_derived_variant_write_many.move:10: apply_to (spec)
+   =     at tests/sources/functional/closures/behavioral_derived_variant_write_many.move:37: c_many_incorrect
+   =         s = <redacted>
+   =     at tests/sources/functional/closures/behavioral_derived_variant_write_many.move:38: c_many_incorrect (spec)
+
+error: post-condition does not hold
+   ┌─ tests/sources/functional/closures/behavioral_derived_variant_write_many.move:49:31
+   │
+49 │     spec c_shared_incorrect { ensures s is A; }
+   │                               ^^^^^^^^^^^^^^^
+   │
+   =     at tests/sources/functional/closures/behavioral_derived_variant_write_many.move:48: c_shared_incorrect
+   =         s = <redacted>
+   =     at tests/sources/functional/closures/behavioral_derived_variant_write_many.move:10: apply_to (spec)
+   =     at tests/sources/functional/closures/behavioral_derived_variant_write_many.move:48: c_shared_incorrect
+   =         s = <redacted>
+   =     at tests/sources/functional/closures/behavioral_derived_variant_write_many.move:49: c_shared_incorrect (spec)
