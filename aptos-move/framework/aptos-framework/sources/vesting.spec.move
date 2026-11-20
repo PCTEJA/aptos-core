@@ -318,7 +318,7 @@ spec aptos_framework::vesting {
         aborts_if simple_map::spec_contains_key(staking_contracts, new_operator);
 
         let staking_contract = simple_map::spec_get(staking_contracts, old_operator);
-        include DistributeInternalAbortsIf { staker: acc, operator: old_operator, staking_contract };
+        include staking_contract::DistributeInternalAbortsIf { staker: acc, operator: old_operator, staking_contract };
 
         let post post_vesting_contract = global<VestingContract>(contract_address);
         ensures post_vesting_contract.staking.operator == new_operator;
@@ -511,7 +511,7 @@ spec aptos_framework::vesting {
         // verify staking_contract::distribute_internal()
         let store = global<staking_contract::Store>(acc);
         let staking_contract = simple_map::spec_get(store.staking_contracts, operator);
-        include amount != 0 ==> DistributeInternalAbortsIf { staker: acc, operator, staking_contract };
+        include amount != 0 ==> staking_contract::DistributeInternalAbortsIf { staker: acc, operator, staking_contract };
     }
 
     spec withdraw_stake(vesting_contract: &VestingContract, contract_address: address): Coin<AptosCoin> {
@@ -529,36 +529,7 @@ spec aptos_framework::vesting {
         // verify staking_contract::distribute_internal()
         let store = global<staking_contract::Store>(contract_address);
         let staking_contract = simple_map::spec_get(store.staking_contracts, operator);
-        include DistributeInternalAbortsIf { staker: contract_address, operator, staking_contract };
-    }
-
-    spec schema DistributeInternalAbortsIf {
-        staker: address;    // The verification below does not contain the loop in staking_contract::update_distribution_pool().
-        operator: address;
-        staking_contract: staking_contract::StakingContract;
-
-        let pool_address = staking_contract.pool_address;
-        aborts_if !exists<stake::StakePool>(pool_address);
-        let stake_pool = global<stake::StakePool>(pool_address);
-        let inactive = stake_pool.inactive.value;
-        let pending_inactive = stake_pool.pending_inactive.value;
-        aborts_if inactive + pending_inactive > MAX_U64;
-
-        // verify stake::withdraw_with_cap()
-        let total_potential_withdrawable = inactive + pending_inactive;
-        let pool_address_1 = staking_contract.owner_cap.pool_address;
-        aborts_if !exists<stake::StakePool>(pool_address_1);
-        let stake_pool_1 = global<stake::StakePool>(pool_address_1);
-        aborts_if !exists<stake::ValidatorSet>(@aptos_framework);
-        let validator_set = global<stake::ValidatorSet>(@aptos_framework);
-        let inactive_state = !stake::spec_contains(validator_set.pending_active, pool_address_1)
-            && !stake::spec_contains(validator_set.active_validators, pool_address_1)
-            && !stake::spec_contains(validator_set.pending_inactive, pool_address_1);
-        let inactive_1 = stake_pool_1.inactive.value;
-        let pending_inactive_1 = stake_pool_1.pending_inactive.value;
-        let new_inactive_1 = inactive_1 + pending_inactive_1;
-        aborts_if inactive_state && timestamp::spec_now_seconds() >= stake_pool_1.locked_until_secs
-            && inactive_1 + pending_inactive_1 > MAX_U64;
+        include staking_contract::DistributeInternalAbortsIf { staker: contract_address, operator, staking_contract };
     }
 
     spec get_beneficiary(contract: &VestingContract, shareholder: address): address {

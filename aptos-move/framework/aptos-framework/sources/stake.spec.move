@@ -37,7 +37,8 @@ spec aptos_framework::stake {
     /// Implementation: The on_new_epoch function is triggered at each epoch boundary to perform distribution of the
     /// transaction fee, updates to active/inactive stakes, updates to pending active/inactive validators and adjusts
     /// voting power of the validators without aborting.
-    /// Enforcement: Formally verified via [high-level-req-4](on_new_epoch). This also requires a manual review to verify the state updates of the stake pool.
+    /// Enforcement: Specified in [high-level-req-4](on_new_epoch), whose specification is not verified. Audited,
+    /// including the state updates of the stake pool.
     /// </high-level-req>
     ///
     // -----------------

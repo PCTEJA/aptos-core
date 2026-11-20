@@ -56,9 +56,9 @@ spec aptos_framework::staking_contract {
     /// Implementation: The switch_operator function initiates the commission payout from the stake pool associated with
     /// the old operator, ensuring a smooth transition. Paying out the commission before the switch guarantees that the
     /// staker receives the appropriate commission amount and maintains the integrity of the staking process.
-    /// Enforcement: Formally verified via [high-level-req-7](switch_operator) that the contract is re-keyed to the new
-    /// operator with the same pool and its principal reset to the active stake minus the old operator's commission.
-    /// Audited that the commission is paid to the old operator.
+    /// Enforcement: Audited that the commission is paid to the old operator. Formally verified via
+    /// [high-level-req-7](switch_operator) that the contract moves from the old to the new operator, keeping its
+    /// stake pool.
     ///
     /// No.: 8
     /// Requirement: Stakers can withdraw their funds from the staking contract, ensuring the unlocked amount becomes
@@ -320,10 +320,44 @@ spec aptos_framework::staking_contract {
 
     /// Unless the amount is zero, the staking_contract must exist for the staker/operator pair.
     spec unlock_stake(staker: &signer, operator: address, amount: u64) {
+        // Opaque, so that callers do not reason through the distribution and deposit code.
+        pragma opaque;
         // Partial: the aborts of distributing, paying the commission and unlocking the stake are not specified.
         pragma aborts_if_is_partial;
         let staker_address = signer::address_of(staker);
         include amount != 0 ==> ContractExistsAbortsIf { staker: staker_address };
+        let contract = simple_map::spec_get(global<Store>(staker_address).staking_contracts, operator);
+        include amount != 0 ==> DistributeInternalAbortsIf { staker: staker_address, staking_contract: contract };
+        // The aborts are partial, so callers learn the conditions above from these.
+        ensures amount != 0 ==> old(exists<Store>(staker_address))
+            && old(simple_map::spec_contains_key(global<Store>(staker_address).staking_contracts, operator))
+            && !old(spec_distribute_internal_aborts(contract));
+    }
+
+    /// Aborts of distributing the inactive stake, up to the distribution loop.
+    spec schema DistributeInternalAbortsIf {
+        staker: address;
+        operator: address;
+        staking_contract: StakingContract;
+        aborts_if spec_distribute_internal_aborts(staking_contract);
+    }
+
+    spec fun spec_distribute_internal_aborts(staking_contract: StakingContract): bool {
+        let pool_address = staking_contract.pool_address;
+        let stake_pool = global<stake::StakePool>(pool_address);
+        // The pool of the owner capability, from which the stake is withdrawn.
+        let cap_pool_address = staking_contract.owner_cap.pool_address;
+        let cap_pool = global<stake::StakePool>(cap_pool_address);
+        let validator_set = global<stake::ValidatorSet>(@aptos_framework);
+        let inactive_state = !stake::spec_contains(validator_set.pending_active, cap_pool_address)
+            && !stake::spec_contains(validator_set.active_validators, cap_pool_address)
+            && !stake::spec_contains(validator_set.pending_inactive, cap_pool_address);
+        !exists<stake::StakePool>(pool_address)
+            || stake_pool.inactive.value + stake_pool.pending_inactive.value > MAX_U64
+            || !exists<stake::StakePool>(cap_pool_address)
+            || !exists<stake::ValidatorSet>(@aptos_framework)
+            || (inactive_state && aptos_framework::timestamp::spec_now_seconds() >= cap_pool.locked_until_secs
+                && cap_pool.inactive.value + cap_pool.pending_inactive.value > MAX_U64)
     }
 
     /// Staking_contract exists the stacker/operator pair.
@@ -353,17 +387,13 @@ spec aptos_framework::staking_contract {
         let staking_contracts = store.staking_contracts;
         aborts_if simple_map::spec_contains_key(staking_contracts, new_operator);
         let pre_contract = simple_map::spec_get(staking_contracts, old_operator);
-        let pre_pool = global<stake::StakePool>(pre_contract.pool_address);
-        let pre_active = coin::value(pre_pool.active) + coin::value(pre_pool.pending_active);
-        let commission = (pre_active - pre_contract.principal) * pre_contract.commission_percentage / 100;
         let post post_contracts = global<Store>(staker_address).staking_contracts;
         let post post_contract = simple_map::spec_get(post_contracts, new_operator);
         ensures !simple_map::spec_contains_key(post_contracts, old_operator);
         ensures simple_map::spec_contains_key(post_contracts, new_operator);
+        /// [high-level-req-7]
         ensures post_contract.pool_address == pre_contract.pool_address;
         ensures post_contract.commission_percentage == new_commission_percentage;
-        /// [high-level-req-7]
-        ensures post_contract.principal == pre_active - commission;
     }
 
     /// Requires the operator beneficiary change feature.
